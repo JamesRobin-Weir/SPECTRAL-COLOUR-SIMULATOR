@@ -251,7 +251,7 @@ def main():
         ax.legend()
         plt.show()
 
-
+        fig, ax = plt.subplots()
         for i in range (len(E)): ## barres de type dirac en nm
             plt.plot([Lambda_excite[i],Lambda_excite[i]],[f[i],0],color="blue")
             

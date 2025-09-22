@@ -43,12 +43,19 @@ def get_bool(prompt):
         except KeyError:
             print ("Repondez oui ou non")
             
-def get_int(prompt):
+def get_float(prompt):
     while True:
         try:
             return float(input(prompt))
         except ValueError:
             print("Tapez un nombre, la gamme recommandé se situe entre 0.1 et 2.5")
+
+def get_int(prompt):
+    while True:
+        try:
+            return int(input(prompt))
+        except ValueError:
+            print("Tapez un nombre entier positif non nulle")
 
 if not get_bool("Etes vous sur windows? \n"):
     file_path1="lampe.D65"
@@ -62,15 +69,26 @@ else:
     file_path4=os.path.join(__location__, "lampe.A.txt")
 
 def main():
-    while True:   
-        if not get_bool("Utiliser les parametres de base (lumiere naturelle, sigma=0.5) ? - entrez oui ou non \n"):
-            artificielle = get_bool("Vous voulez simuler une lumière artificielle - entrez oui ou non \n")
-            sigma_global=get_int("Entrez la valeur de sigma souhaitée (valeur recommandé comprise entre 0.1 et 2.5) \n")
+    while True:
+        artificielle = not get_bool("Vous voulez simuler une lumière naturelle - entrez oui ou non \n")
+        if not get_bool("Utiliser les parametres de base (sigma gaussienne=0.5, etendre simulation 30nm) ? - entrez oui ou non \n"):
+            sigma_global=get_float("Entrez la valeur de sigma souhaitée (valeur recommandé comprise entre 0.1 et 2.5) \n")
+            etendre_inf=get_int("Entrez le nombre de nm simulés en dessous des données (valeur recommandé 30) \n")
+            etendre_sup=get_int("Entrez le nombre de nm simulés au dessus des données (valeur recommandé 0) \n")
         else:
             artificielle=False
             sigma_global=0.5
+            etendre_sup=0 ##etendre domaine simulation sup
+            etendre_inf=30 ##etendre domaine simulation inf
 
-        print("\n ------------------------------------------------------------------------ \n")
+        if not get_bool("Vous utilisez les fichiers données de base - entrez oui ou non \n"):
+            lambda1=get_int("Entrez la valeur inférieur de lambda dans vos données (valeur recommandé 380) \n")
+            lambda2=get_int("Entrez la valeur supérieur de lambda dans vos données (valeur recommandé 779) \n")
+        else:
+            lambda1=380 ##debut domaine spectral
+            lambda2=779 ##fin du domaine
+
+        print("\n------------------------------------------------------------------------ \n")
 
         ## Creation des listes de donnees
         Lambda_0=[]
@@ -86,7 +104,7 @@ def main():
             for _ in range(1):
                 next(file)
             for line in file:
-                a, b = line.rstrip().split("	", 1)
+                a, b = line.rstrip().split("\t", 1)
                 Lambda_0.append(float(a))
                 S_D65.append(float(b))
 
@@ -102,7 +120,7 @@ def main():
             for _ in range(1):
                 next(file)
             for line in file:
-                a, b, c, d = line.rstrip().split("	")
+                a, b, c, d = line.rstrip().split("\t")
                 #Lambda.append(float(a))
                 x_bar.append(float(b))
                 y_bar.append(float(c))
@@ -112,20 +130,16 @@ def main():
             for _ in range(1):
                 next(file)
             for line in file:
-                a, b = line.rstrip().split("	", 1)
+                a, b = line.rstrip().split("\t", 1)
                 S_A.append(float(b))
 
-
+        ## Les data base de base sont pas de meme longeur
         T_D149.pop()
         x_bar.pop()
         y_bar.pop()
         z_bar.pop()
 
-
         ## Constantes
-        lambda1=380 ##debut domaine spectral
-        lambda2=779 ##fin du domaine
-
         C1=3.748406*10**(-16)
         C2=1.438769*10**(-2)
         C3=2885*10**(-6)
@@ -133,10 +147,9 @@ def main():
         c=299792458
         eV_J=1.6021774232052327*10**(-19)
         hc_eV = (h*c)/eV_J
-        Lambda2=[i for i in range(lambda1, lambda2+1)]
+        Lambda2 =[i for i in range(lambda1, lambda2+1)]
         Lambda = [hc_eV/(x*1e-9) for x in Lambda2]
         ## Le visible est entre 1.55 et 3.1 eV
-        print(Lambda)
 
 
         ## Creation des listes de donnees
@@ -150,10 +163,10 @@ def main():
         Lambda_excite2 = []
         f2 = []
         E2 = []
-        
+
         for i in range (len(Excited)):
-            if lambda2>Lambda_excite[i]>lambda1-30 :
-                print("ui")
+            if lambda2+etendre_sup>Lambda_excite[i]>lambda1-etendre_inf :
+                """print("ui")"""
                 Excited2.append(Excited[i])
                 Lambda_excite2.append(Lambda_excite[i])
                 f2.append(f[i])
@@ -226,27 +239,29 @@ def main():
         ### Graphes en eV et en lambda de l'absorbance
         #### Dirac
         #plt.scatter(Lambda_excite,f,s=3,c='blue')
-        for i in range (len(E)): ## barres de type dirac
+        fig, ax = plt.subplots()
+        for i in range (len(E)): ## barres de type dirac en eV
             plt.plot([E[i],E[i]],[f[i],0],color="blue")
         ### Gaus
-        fig, ax = plt.subplots()
-        plt.plot(Lambda, G, label="optimisé")
-        plt.plot(Lambda, G_non_opt, label="non optimisé")
-        plt.title("Spectre de Transmittance D149 theorique")
+        plt.plot(Lambda, G, label="Sigma optimisé")
+        plt.plot(Lambda, G_non_opt, label="Non sigma optimisé")
+        plt.title("Spectre et pics d'absorbance D149 theoriques en eV")
         plt.xlabel("Energie (eV)")
         plt.ylabel('Absorbance')
         ax.legend()
         plt.show()
 
 
-        for i in range (len(E)): ## barres de type dirac
+        for i in range (len(E)): ## barres de type dirac en nm
             plt.plot([Lambda_excite[i],Lambda_excite[i]],[f[i],0],color="blue")
             
 
-        plt.plot(Lambda2, G)
-        plt.title("Spectre Dirac et Gaus")
+        plt.plot(Lambda2, G, label="Sigma optimisé")
+        plt.plot(Lambda2, G_non_opt, label="Non sigma optimisé")
+        plt.title("Spectre et pics d'absorbance D149 theoriques en nm")
         plt.xlabel("Longeur d'onde (nm)")
         plt.ylabel('Absorbance')
+        ax.legend()
         plt.show()
 
         # Graphe transmittance theorique et reel
@@ -255,7 +270,9 @@ def main():
 
         a=max(T_D149)
         Trans=[transmittance(x)*a for x in G]
-        plt.plot(Lambda2, Trans, label='T_theorique')
+        Trans_non_opt=[transmittance(x)*a for x in G_non_opt]
+        plt.plot(Lambda2, Trans, label='T_theorique_opt')
+        plt.plot(Lambda2, Trans_non_opt, label='T_theorique_non_opt')
         plt.title("Spectres de transmission")
         plt.xlabel("Longeur d'onde (nm)")
         plt.ylabel('Transmittance')
@@ -269,13 +286,12 @@ def main():
 
         # Couleurs reel et theorique
         ## Theorique
-        ### Transmittance
+        ### Transmittance Optimisé
         L_ech=[]
         for x in G:
             L_ech.append(transmittance(x))
 
-
-        ### Fonction integration liste elements espaces de 1
+        ### Fonction integration liste elements espaces de 1 nm
         def integrale_rec_points(f): #methode rec de "fonction" (liste) sur son domaine
             aire=0
             for i in range (0,len(f)-1):
@@ -314,6 +330,9 @@ def main():
             return K, X, Y, Z
 
         K,X,Y,Z = integrale_para()
+
+        print("\n------------------------------------------------------------------------ \n")
+        print("Transmittance Sigma Optimisé:")
         print("X,Y,Z theoriques = ", [X, Y, Z])
 
 
@@ -358,12 +377,12 @@ def main():
         fig = plt.figure()
         ax = fig.add_subplot()
 
-        print("R, G, B theoriques =", sR, sG, sB)
-        
-        circ_T = plt.Circle((2,0), 4, color=(sR/255,sG/255,sB/255))
+        print("R,G,B theoriques =", sR, sG, sB, "\n")
+
+        #### Optimisé
+        circ_T = plt.Circle((-6,0), 4, color=(sR/255,sG/255,sB/255))
         ax.add_patch(circ_T)
-        plt.text(1, 5, 'Theorique', fontsize=12, bbox=dict(facecolor='black', alpha=0))
-        
+        plt.text(-6, 5, 'Theorique Optimisé', fontsize=12, bbox=dict(facecolor='black', alpha=0), ha='center', va='center')
 
         ### Calculs listes integrandes reels
         integrande_x=[]
@@ -374,29 +393,57 @@ def main():
         integrande(T_D149)
 
         K,X,Y,Z = integrale_para()
+        print("Transmittance Réel:")
         print("X,Y,Z reels = ", [X, Y, Z])
-        print("R, G, B reels =", sR, sG, sB)
+        print("R, G, B reels =", sR, sG, sB, "\n")
 
         sR, sG, sB=changement_base(X, Y, Z)
         sR, sG, sB=format_RBG(sR, sG, sB)
 
-        circ_R = plt.Circle((12,0), 4, color=(sR/255,sG/255,sB/255))
+        circ_R = plt.Circle((6,0), 4, color=(sR/255,sG/255,sB/255))
         ax.add_patch(circ_R)
-        plt.text(11, 5, 'Réel', fontsize=12, bbox=dict(facecolor='black', alpha=0))
+        plt.text(6, 5, 'Réel', fontsize=12, bbox=dict(facecolor='black', alpha=0), ha='center', va='center')
 
 
-        ## ### Affichage en cercle de couleur (reel)
+        ## Theorique Non Sigma Optimisé
+        L_ech_non_opt=[]
+        for x in G_non_opt:
+            L_ech_non_opt.append(transmittance(x))
+
+        integrande_x=[]
+        integrande_y=[]
+        integrande_z=[]
+        integrande_K=[]
+
+        integrande(L_ech_non_opt)
+
+        K,X,Y,Z = integrale_para()
+        print("Transmittance Non Sigma Optimisé:")
+        print("X,Y,Z theoriques non sigma optimisés= ", [X, Y, Z])
+        print("R,G,B theoriques non sigma optimisés =", sR, sG, sB, "\n")
+
+        sR, sG, sB=changement_base(X, Y, Z)
+        sR, sG, sB=format_RBG(sR, sG, sB)
+        
+        circ_T = plt.Circle((0,-11), 4, color=(sR/255,sG/255,sB/255))
+        ax.add_patch(circ_T)
+        plt.text(0, -6, 'Theorique Non Optimisé', fontsize=12, bbox=dict(facecolor='black', alpha=0), ha='center', va='center')
+
+
+        ### Affichage en cercle de couleur (reel)
 
         plt.axis('equal')
         plt.axis('off')
         plt.show()
-
+        
+        print("\n------------------------------------------------------------------------ \n")
+        
         if get_bool("Recommencer? \n"):
             pass
         else:
             print("------------------------------------------------------------------------ \n")
             print("Merci d'avoir utilisé SPECTRAL COLOUR SIMULATOR - 2025 \n")
             print("------------------------------------------------------------------------ \n")
-            quit()
+            exit()
 
 main()
